@@ -1,5 +1,5 @@
 [project]
-name = "lsum"
+name = "lsum-enhanced"
 version = "1.0.0"
 description = "Directory summary tool with powerful grouping, and recursive searching"
 readme = "README.md"
@@ -15,6 +15,9 @@ dependencies = [
 
 [project.scripts]
 lse = "lsum.main:cli"
+
+[tool.flit.module]
+name = "lsum"
 
 [build-system]
 requires = ["flit_core<4"]
