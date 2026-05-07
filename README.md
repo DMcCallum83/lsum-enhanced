@@ -73,11 +73,18 @@ Perfect for developers who want the latest features:
 
 ```bash
 # Clone the repository
-git clone https://github.com/Debajyati/lsum.git
-cd lsum
+git clone https://github.com/DMcCallum83/lsum-enhanced.git
+cd lsum-enhanced
 
-# Install dependencies and build
-uv pip install -e .
+# Install dependencies
+sudo apt install libmagic1
+# or for macOS
+brew install libmagic
+# then build
+uv build
+
+# test your dev build
+uv run lsum .
 ```
 
 ---
