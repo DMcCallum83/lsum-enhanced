@@ -1,23 +1,21 @@
-# 📂 lsum
-
-[![PyPI version](https://img.shields.io/pypi/v/lsum.svg?color=blue)](https://pypi.org/project/lsum/)
+# 📂 lsum-enhanced
 [![Python Version](https://img.shields.io/badge/python-3.10+-blue.svg)](https://python.org)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Code Style: Black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/psf/black)
 
-**lsum** (List Summary) is a high-performance, visually rich CLI directory analysis tool that transforms standard file listings into actionable intelligence.
+**lsum-enhanced** (List Summary Enhanced) is a high-performance, visually rich CLI directory analysis tool that transforms standard file listings into actionable intelligence.
 
 ---
 
 ### ⚡ TL;DR
 
-`lsum` is `ls` on steroids. It doesn't just list files; it **categorizes**, **counts**, and **visualizes** your directory's distribution by MIME types, extensions, and metadata—all while respecting your `.gitignore` rules.
+`lsum-enhanced` is `ls` on steroids. It doesn't just list files; it **categorizes**, **counts**, and **visualizes** your directory's distribution by MIME types, extensions, and metadata—all while respecting your `.gitignore` rules.
 
 ---
 
-### 🤔 Why lsum?
+### 🤔 Why lsum-enhanced?
 
-Standard tools like `ls` or `tree` are great for finding files, but they fail to answer higher-level questions about your workspace. `lsum` was built to fill that gap:
+Standard tools like `ls` or `tree` are great for finding files, but they fail to answer higher-level questions about your workspace. `lsum-enhanced` was built to fill that gap:
 
 * **Audit Your Assets:** Instantly see how many gigabytes of images vs. text files you have.
 * **Visualize Structure:** Group files into elegant, color-coded panels based on their actual content (MIME) rather than just extensions.
@@ -25,7 +23,7 @@ Standard tools like `ls` or `tree` are great for finding files, but they fail to
 * **Recursive Intelligence:** Understand the composition of entire project trees in a single, formatted view.
 
 > [!NOTE]
-> lsum is under active development
+> lsum-enhanced is under active development
 
 ---
 
@@ -47,26 +45,6 @@ sudo apt install libmagic1
 brew install libmagic
 ```
 
-##### Windows (you don't need to install it manually, it is handled in the dependencies)
-Install via:
-```bash
-pip install python-magic-bin
-```
-
-#### 📦 From PyPI (Recommended)
-
-Install using [uv](https://github.com/astral-sh/uv) for the best experience:
-
-```bash
-uv tool install lsum
-```
-
-Or with standard pip:
-
-```bash
-pip install lsum
-```
-
 #### 🛠️ Building From Source
 
 Perfect for developers who want the latest features:
@@ -84,7 +62,7 @@ brew install libmagic
 uv build
 
 # test your dev build
-uv run lsum .
+uv run lse .
 ```
 
 ---
@@ -96,7 +74,7 @@ uv run lsum .
 A clean, tabular view of your current directory:
 
 ```bash
-lsum
+lse
 ```
 
 #### 2. Group by MIME Type (with Icons)
@@ -104,7 +82,8 @@ lsum
 See your files grouped by their actual content type (e.g., Image, Video, Text):
 
 ```bash
-lsum --group
+lse --group
+lse -g
 ```
 
 #### 3. Respect Gitignore
@@ -112,7 +91,8 @@ lsum --group
 Exclude build artifacts and ignored files for a "clean" summary:
 
 ```bash
-lsum . --gitignore --count
+lse . --gitignore --count
+lse . -gi -c
 ```
 
 #### 4. Recursive Extension Summary
@@ -120,7 +100,8 @@ lsum . --gitignore --count
 Analyze every file in your project tree, grouped by extension:
 
 ```bash
-lsum . --recursive --group-extension
+lse . --recursive --group-extension
+lse . -r -ge
 ```
 
 #### 5. Advanced Sorting & Filtering
@@ -128,7 +109,8 @@ lsum . --recursive --group-extension
 Find all `.txt` files and sort them by size:
 
 ```bash
-lsum --filter-extension .txt --sort size
+lse --filter-extension .txt --sort size
+lse -fe .txt -s size
 ```
 
 ---
@@ -144,6 +126,7 @@ lsum --filter-extension .txt --sort size
 | `--recursive`       | `-r`      | Perform operations on all subdirectories.            |
 | `--sort`            | `-s`      | Sort by `name`, `size`, or `date`.                   |
 | `--filter`          | `-f`      | Filter by a specific MIME type (e.g., `image/jpeg`). |
+|  --filter-text      |  -ft      | Filter filename.                                     |
 
 ---
 
