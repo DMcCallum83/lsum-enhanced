@@ -126,7 +126,7 @@ lse -fe .txt -s size
 | `--recursive`       | `-r`      | Perform operations on all subdirectories.            |
 | `--sort`            | `-s`      | Sort by `name`, `size`, or `date`.                   |
 | `--filter`          | `-f`      | Filter by a specific MIME type (e.g., `image/jpeg`). |
-|  `--filter-text`    |  -ft      | Filter filename.                                     |
+|  `--filter-text`    |  `-ft`    | Filter filename.                                     |
 
 ---
 
