@@ -1,619 +1,286 @@
+from __future__ import annotations
+
 import os
 from collections import Counter
-from .utils import assoclist, get_gitignore_matcher
+from typing import Literal
+
 from rich import print
-from rich.table import Table
-from rich.panel import Panel
 from rich.columns import Columns
-from .mime import get_mime_type
+from rich.panel import Panel
+from rich.table import Table
+
 from .constants import MIME_TYPE_ICONS, colormap
+from .mime import get_mime_type
+from .utils import get_gitignore_matcher
 
-def count_files(path=".", gitignore=False):
+GroupBy = Literal["mime", "extension"] | None
+SortBy = Literal["name", "size", "date"] | None
+
+
+# ── Collection ──────────────────────────────────────────────────────────────────
+
+def _scan_dir(
+    root: str,
+    base: str,
+    matcher,
+    recursive: bool,
+    files_out: list[os.DirEntry],
+    dirs_out: list[os.DirEntry] | None,
+    top_level_only: bool,
+) -> None:
     try:
-        matcher = get_gitignore_matcher(path) if gitignore else None
-        dirs = 0
-        non_dirs = 0
-        with os.scandir(path) as files:
-            for file in files:
-                if matcher and matcher.match_file(file.name + ("/" if file.is_dir() else "")):
-                    continue
-                if file.is_dir():
-                    dirs += 1
-                else:
-                    non_dirs += 1
-        print(f"Directories: {dirs}")
-        print(f"Files: {non_dirs}")
-    except FileNotFoundError:
-        print(
-            f"[bold yellow]Error:[/bold yellow] The directory '{path}' does not exist."
-        )
+        entries = list(os.scandir(root))
     except PermissionError:
-        print(
-            f"[bold yellow]Error:[/bold yellow] You do not have permission to access '{path}'."
-        )
-
-def list_files(path=".", gitignore=False, sort_by=None):
-    try:
-        matcher = get_gitignore_matcher(path) if gitignore else None
-        entries_list = []
-        with os.scandir(path) as entries:
-            for entry in entries:
-                if matcher and matcher.match_file(entry.name + ("/" if entry.is_dir() else "")):
-                    continue
-                entries_list.append(entry)
-
-        if sort_by:
-            entries_list = get_sorted_entries(entries_list, sort_by)
-
-        dirs = [f"{e.name}/" for e in entries_list if e.is_dir()]
-        non_dirs = [e.name for e in entries_list if e.is_file()]
-
-        dirlen = len(dirs)
-        non_dirlen = len(non_dirs)
-
-        if dirlen < non_dirlen:
-            dirs = dirs + [""] * (non_dirlen - dirlen)
-        elif non_dirlen < dirlen:
-            non_dirs = non_dirs + [""] * (dirlen - non_dirlen)
-
-        files_assoclist = assoclist(dirs, non_dirs)
-        table = Table(
-            show_header=True,
-            header_style="bold magenta",
-            title=f"{path if path != '.' else 'CWD'} Listing",
-            title_style="bold underline magenta",
-        )
-        table.add_column("Index", style="dim", width=6, justify="right")
-        table.add_column("Directories", style="bold blue underline", justify="left")
-        table.add_column("Files", style="bold green underline", justify="left")
-
-        index = 1
-        for first, second in files_assoclist.__iter__():
-            table.add_row(
-                str(index), f"{first}" if len(first) else "", f"{second}"
-            )
-            index += 1
-        print(table)
-
-    except FileNotFoundError:
-        print(
-            f"[bold yellow]Error:[/bold yellow] The directory '{path}' does not exist."
-        )
-    except PermissionError:
-        print(
-            f"[bold yellow]Error:[/bold yellow] You do not have permission to access '{path}'."
-        )
-
-def count_files_by_mime_type(path=".", gitignore=False):
-    try:
-        matcher = get_gitignore_matcher(path) if gitignore else None
-        mime_counts = Counter()
-        with os.scandir(path) as files:
-            for file in files:
-                if matcher and matcher.match_file(file.name + ("/" if file.is_dir() else "")):
-                    continue
-                if file.is_file():
-                    mime_type = get_mime_type(file.path) or "Unknown MIME Type"
-                    mime_counts[mime_type] += 1
-
-        table = Table(
-            show_header=True,
-            header_style="bold magenta",
-            title=f"{path if path != '.' else 'CWD'} File Counts by MIME Type",
-            title_style="bold underline magenta",
-        )
-        table.add_column("MIME Type", style="bold red", justify="left")
-        table.add_column("Count", style="bold yellow", justify="right")
-
-        for mime, count in mime_counts.items():
-            table.add_row(mime, str(count))
-
-        print(table)
-
-    except FileNotFoundError:
-        print(
-            f"[bold yellow]Error:[/bold yellow] The directory '{path}' does not exist."
-        )
-    except PermissionError:
-        print(
-            f"[bold yellow]Error:[/bold yellow] You do not have permission to access '{path}'."
-        )
-
-# multibox layout with one box for each MIME type, and each box contains a list of files with that MIME type, and the box title is the MIME type and the count of files with that MIME type
-# use colormap and MIME_TYPE_ICONS to color the box title and add an icon to the box title based on the MIME type, if the MIME type is not in the colormap or MIME_TYPE_ICONS, use a default color and icon
-def group_files_by_mime_type(path=".", gitignore=False, sort_by=None):
-    try:
-        matcher = get_gitignore_matcher(path) if gitignore else None
-        mime_groups = {}
-        entries_list = []
-        with os.scandir(path) as entries:
-            for entry in entries:
-                if matcher and matcher.match_file(entry.name + ("/" if entry.is_dir() else "")):
-                    continue
-                if entry.is_file():
-                    entries_list.append(entry)
-
-        if sort_by:
-            entries_list = get_sorted_entries(entries_list, sort_by)
-
-        for entry in entries_list:
-            mime_type = get_mime_type(entry.path) or "unknown/type"
-            mime_groups.setdefault(mime_type, []).append(entry.name)
-
-        panels = []
-        for mime, files in mime_groups.items():
-            # Get the prefix (e.g., 'image' from 'image/jpeg')
-            prefix, suffix = mime.split("/")[0], mime.split("/")[1]
-            color = colormap.get(prefix, colormap.get(suffix, "white"))
-            icon = MIME_TYPE_ICONS.get(suffix, MIME_TYPE_ICONS.get(prefix, "📁"))
-
-            # 1. Join all files into one string first so they don't overwrite each other
-            file_list_str = "\n".join([f"[{color}]{f}[/{color}]" for f in files])
-
-            # 2. Create a Panel (the "Box") for this MIME type
-            box_title = f"{icon} {mime} ({len(files)})"
-            panels.append(Panel(file_list_str, title=box_title, border_style=color, expand=False))
-
-        # 3. Use Columns to display boxes side-by-side (or wrapped)
-        print(Columns(panels))
-
-    except FileNotFoundError:
-        print(f"[bold red]Error:[/bold red] Directory '{path}' not found.")
-    except PermissionError:
-        print(f"[bold red]Error:[/bold red] Permission denied for '{path}'.")
-
-def count_files_by_extension(path=".", gitignore=False):
-    try:
-        matcher = get_gitignore_matcher(path) if gitignore else None
-        extension_counts = Counter()
-        with os.scandir(path) as files:
-            for file in files:
-                if matcher and matcher.match_file(file.name + ("/" if file.is_dir() else "")):
-                    continue
-                if file.is_file():
-                    ext = os.path.splitext(file.name)[1].lower() or "No Extension"
-                    extension_counts[ext] += 1
-
-        table = Table(
-            show_header=True,
-            header_style="bold magenta",
-            title=f"{path if path != '.' else 'CWD'} File Counts by Extension",
-            title_style="bold underline magenta",
-        )
-        table.add_column("Extension", style="bold red", justify="left")
-        table.add_column("Count", style="bold yellow", justify="right")
-
-        for ext, count in extension_counts.items():
-            table.add_row(ext, str(count))
-
-        print(table)
-
-    except FileNotFoundError:
-        print(
-            f"[bold yellow]Error:[/bold yellow] The directory '{path}' does not exist."
-        )
-    except PermissionError:
-        print(
-            f"[bold yellow]Error:[/bold yellow] You do not have permission to access '{path}'."
-        )
-
-def group_files_by_extension(path=".", gitignore=False, sort_by=None):
-    try:
-        matcher = get_gitignore_matcher(path) if gitignore else None
-        extension_groups = {}
-        entries_list = []
-        with os.scandir(path) as entries:
-            for entry in entries:
-                if matcher and matcher.match_file(entry.name + ("/" if entry.is_dir() else "")):
-                    continue
-                if entry.is_file():
-                    entries_list.append(entry)
-
-        if sort_by:
-            entries_list = get_sorted_entries(entries_list, sort_by)
-
-        for entry in entries_list:
-            ext = os.path.splitext(entry.name)[1].lower() or "No Extension"
-            extension_groups.setdefault(ext, []).append(entry.path)
-
-        table = Table(
-            show_header=True,
-            header_style="bold magenta",
-            title=f"{path if path != '.' else 'CWD'} Files Grouped by Extension",
-            title_style="bold underline magenta",
-        )
-        table.add_column("Index", style="dim", width=6, justify="center")
-        table.add_column("Extension", style="bold red", justify="left")
-        table.add_column("Files", style="bold yellow", justify="left")
-
-        # when a new extension is encountered, print the first row with the extension with overline style, and subsequent rows with an empty extension column and no overline style
-        for ext, files in extension_groups.items():
-            first = True
-            index = 1
-            for file in files:
-                if first:
-                    table.add_row(f"{index}",ext, file)
-                    first = False
-                    index += 1
-                else:
-                    table.add_row(f"{index}","", file)
-                    index += 1
-            table.add_row("")  # add an empty row after each extension group for better readability
-
-        print(table)
-
-    except FileNotFoundError:
-        print(
-            f"[bold yellow]Error:[/bold yellow] The directory '{path}' does not exist."
-        )
-    except PermissionError:
-        print(
-            f"[bold yellow]Error:[/bold yellow] You do not have permission to access '{path}'."
-        )
-
-def recursive_list_files(path=".", gitignore=False):
-    try:
-        matcher = get_gitignore_matcher(path) if gitignore else None
-        table = Table(
-            show_header=True,
-            header_style="bold magenta",
-            title=f"{path if path != '.' else 'CWD'} Recursive Listing",
-            title_style="bold underline magenta",
-        )
-        table.add_column("Index", style="dim", width=6, justify="right")
-        table.add_column("Path", style="bold cyan", justify="left")
-
-        index = 1
-        for root, dirs, files in os.walk(path):
-            if matcher:
-                rel_root = os.path.relpath(root, path)
-                if rel_root == ".":
-                    rel_root = ""
-                dirs[:] = [d for d in dirs if not matcher.match_file(os.path.join(rel_root, d) + "/")]
-                files = [f for f in files if not matcher.match_file(os.path.join(rel_root, f))]
-
-            for name in dirs + files:
-                full_path = os.path.join(root, name)
-                table.add_row(str(index), full_path)
-                index += 1
-
-        print(table)
-
-    except FileNotFoundError:
-        print(
-            f"[bold yellow]Error:[/bold yellow] The directory '{path}' does not exist."
-        )
-    except PermissionError:
-        print(
-            f"[bold yellow]Error:[/bold yellow] You do not have permission to access '{path}'."
-        )
-
-def recursive_count_files(path=".", gitignore=False):
-    try:
-        matcher = get_gitignore_matcher(path) if gitignore else None
-        file_count = 0
-        dir_count = 0
-        for root, dirs, files in os.walk(path):
-            if matcher:
-                rel_root = os.path.relpath(root, path)
-                if rel_root == ".":
-                    rel_root = ""
-                dirs[:] = [d for d in dirs if not matcher.match_file(os.path.join(rel_root, d) + "/")]
-                files = [f for f in files if not matcher.match_file(os.path.join(rel_root, f))]
-
-            file_count += len(files)
-            dir_count += len(dirs)
-
-        print(f"Total Directories: {dir_count}")
-        print(f"Total Files: {file_count}")
-
-    except FileNotFoundError:
-        print(
-            f"[bold yellow]Error:[/bold yellow] The directory '{path}' does not exist."
-        )
-    except PermissionError:
-        print(
-            f"[bold yellow]Error:[/bold yellow] You do not have permission to access '{path}'."
-        )
-
-def recursive_count_files_by_mime_type(path=".", gitignore=False):
-    try:
-        matcher = get_gitignore_matcher(path) if gitignore else None
-        mime_counts = Counter()
-        for root, dirs, files in os.walk(path):
-            if matcher:
-                rel_root = os.path.relpath(root, path)
-                if rel_root == ".":
-                    rel_root = ""
-                dirs[:] = [d for d in dirs if not matcher.match_file(os.path.join(rel_root, d) + "/")]
-                files = [f for f in files if not matcher.match_file(os.path.join(rel_root, f))]
-
-            for file in files:
-                full_path = os.path.join(root, file)
-                mime_type = get_mime_type(full_path) or "Unknown MIME Type"
-                mime_counts[mime_type] += 1
-
-        table = Table(
-            show_header=True,
-            header_style="bold magenta",
-            title=f"{path if path != '.' else 'CWD'} Recursive File Counts by MIME Type",
-            title_style="bold underline magenta",
-        )
-        table.add_column("MIME Type", style="bold red", justify="left")
-        table.add_column("Count", style="bold yellow", justify="right")
-
-        for mime, count in mime_counts.items():
-            table.add_row(mime, str(count))
-
-        print(table)
-
-    except FileNotFoundError:
-        print(
-            f"[bold yellow]Error:[/bold yellow] The directory '{path}' does not exist."
-        )
-    except PermissionError:
-        print(
-            f"[bold yellow]Error:[/bold yellow] You do not have permission to access '{path}'."
-        )
-
-def recursive_group_files_by_mime_type(path=".", gitignore=False):
-    try:
-        matcher = get_gitignore_matcher(path) if gitignore else None
-        mime_groups = {}
-        for root, dirs, files in os.walk(path):
-            if matcher:
-                rel_root = os.path.relpath(root, path)
-                if rel_root == ".":
-                    rel_root = ""
-                dirs[:] = [d for d in dirs if not matcher.match_file(os.path.join(rel_root, d) + "/")]
-                files = [f for f in files if not matcher.match_file(os.path.join(rel_root, f))]
-
-            for file in files:
-                full_path = os.path.join(root, file)
-                mime_type = get_mime_type(full_path) or "unknown/type"
-                mime_groups.setdefault(mime_type, []).append(full_path)
-
-        panels = []
-        for mime, files in mime_groups.items():
-            prefix, suffix = mime.split("/")[0], mime.split("/")[1]
-            color = colormap.get(prefix, colormap.get(suffix, "white"))
-            icon = MIME_TYPE_ICONS.get(suffix, MIME_TYPE_ICONS.get(prefix, "📁"))
-            file_list_str = "\n".join([f"[{color}]{f}[/{color}]" for f in files])
-            box_title = f"{icon} {mime} ({len(files)})"
-            panels.append(Panel(file_list_str, title=box_title, border_style=color, expand=False))
-
-        print(Columns(panels))
-
-    except FileNotFoundError:
-        print(f"[bold red]Error:[/bold red] Directory '{path}' not found.")
-    except PermissionError:
-        print(f"[bold red]Error:[/bold red] Permission denied for '{path}'.")
-
-def recursive_count_files_by_extension(path=".", gitignore=False):
-    try:
-        matcher = get_gitignore_matcher(path) if gitignore else None
-        extension_counts = Counter()
-        for root, dirs, files in os.walk(path):
-            if matcher:
-                rel_root = os.path.relpath(root, path)
-                if rel_root == ".":
-                    rel_root = ""
-                dirs[:] = [d for d in dirs if not matcher.match_file(os.path.join(rel_root, d) + "/")]
-                files = [f for f in files if not matcher.match_file(os.path.join(rel_root, f))]
-
-            for file in files:
-                ext = os.path.splitext(file)[1].lower() or "No Extension"
-                extension_counts[ext] += 1
-
-        table = Table(
-            show_header=True,
-            header_style="bold magenta",
-            title=f"{path if path != '.' else 'CWD'} Recursive File Counts by Extension",
-            title_style="bold underline magenta",
-        )
-        table.add_column("Extension", style="bold red", justify="left")
-        table.add_column("Count", style="bold yellow", justify="right")
-
-        for ext, count in extension_counts.items():
-            table.add_row(ext, str(count))
-
-        print(table)
-
-    except FileNotFoundError:
-        print(
-            f"[bold yellow]Error:[/bold yellow] The directory '{path}' does not exist."
-        )
-    except PermissionError:
-        print(
-            f"[bold yellow]Error:[/bold yellow] You do not have permission to access '{path}'."
-        )
-
-def recursive_group_files_by_extension(path=".", gitignore=False):
-    try:
-        matcher = get_gitignore_matcher(path) if gitignore else None
-        extension_groups = {}
-        for root, dirs, files in os.walk(path):
-            if matcher:
-                rel_root = os.path.relpath(root, path)
-                if rel_root == ".":
-                    rel_root = ""
-                dirs[:] = [d for d in dirs if not matcher.match_file(os.path.join(rel_root, d) + "/")]
-                files = [f for f in files if not matcher.match_file(os.path.join(rel_root, f))]
-
-            for file in files:
-                ext = os.path.splitext(file)[1].lower() or "No Extension"
-                full_path = os.path.join(root, file)
-                extension_groups.setdefault(ext, []).append(full_path)
-
-        table = Table(
-            show_header=True,
-            header_style="bold magenta",
-            title=f"{path if path != '.' else 'CWD'} Recursive Files Grouped by Extension",
-            title_style="bold underline magenta",
-        )
-        table.add_column("Index", style="dim", width=6, justify="center")
-        table.add_column("Extension", style="bold red", justify="left")
-        table.add_column("Files", style="bold yellow", justify="left")
-
-        for ext, files in extension_groups.items():
-            first = True
-            index = 1
-            for file in files:
-                if first:
-                    table.add_row(f"{index}",ext, file)
-                    first = False
-                    index += 1
-                else:
-                    table.add_row(f"{index}","", file)
-                    index += 1
-            table.add_row("")  # add an empty row after each extension group for better readability
-
-        print(table)
-
-    except FileNotFoundError:
-        print(
-            f"[bold yellow]Error:[/bold yellow] The directory '{path}' does not exist."
-        )
-    except PermissionError:
-        print(
-            f"[bold yellow]Error:[/bold yellow] You do not have permission to access '{path}'."
-        )
-
-def filter_files_by_extension(path=".", extension=".txt", gitignore=False, sort_by=None):
-    try:
-        matcher = get_gitignore_matcher(path) if gitignore else None
-        table = Table(
-            show_header=True,
-            header_style="bold magenta",
-            title=f"{path if path != '.' else 'CWD'} Files with Extension '{extension}'",
-            title_style="bold underline magenta",
-        )
-        table.add_column("Index", style="dim", width=6, justify="right")
-        table.add_column("File Name", style="bold green", justify="left")
-
-        entries_list = []
-        with os.scandir(path) as entries:
-            for entry in entries:
-                if matcher and matcher.match_file(entry.name + ("/" if entry.is_dir() else "")):
-                    continue
-                if entry.is_file() and entry.name.lower().endswith(extension.lower()):
-                    entries_list.append(entry)
-
-        if sort_by:
-            entries_list = get_sorted_entries(entries_list, sort_by)
-
-        index = 1
-        for entry in entries_list:
-            table.add_row(str(index), entry.name)
-            index += 1
-
-        print(table)
-
-    except FileNotFoundError:
-        print(
-            f"[bold yellow]Error:[/bold yellow] The directory '{path}' does not exist."
-        )
-    except PermissionError:
-        print(
-            f"[bold yellow]Error:[/bold yellow] You do not have permission to access '{path}'."
-        )
-
-def filter_files_by_mime_type(path=".", mime_type="text/plain", gitignore=False, sort_by=None):
-    try:
-        matcher = get_gitignore_matcher(path) if gitignore else None
-        table = Table(
-            show_header=True,
-            header_style="bold magenta",
-            title=f"{path if path != '.' else 'CWD'} Files with MIME Type '{mime_type}'",
-            title_style="bold underline magenta",
-        )
-        table.add_column("Index", style="dim", width=6, justify="right")
-        table.add_column("File Name", style="bold green", justify="left")
-
-        entries_list = []
-        with os.scandir(path) as entries:
-            for entry in entries:
-                if matcher and matcher.match_file(entry.name + ("/" if entry.is_dir() else "")):
-                    continue
-                if entry.is_file():
-                    file_mime_type = get_mime_type(entry.path)
-                    if file_mime_type == mime_type:
-                        entries_list.append(entry)
-
-        if sort_by:
-            entries_list = get_sorted_entries(entries_list, sort_by)
-
-        index = 1
-        for entry in entries_list:
-            table.add_row(str(index), entry.name)
-            index += 1
-
-        print(table)
-
-    except FileNotFoundError:
-        print(
-            f"[bold yellow]Error:[/bold yellow] The directory '{path}' does not exist."
-        )
-    except PermissionError:
-        print(
-            f"[bold yellow]Error:[/bold yellow] You do not have permission to access '{path}'."
-        )
-
-def count_filter_files_by_mime_type(path=".", mime_type="text/plain", gitignore=False):
-    try:
-        matcher = get_gitignore_matcher(path) if gitignore else None
-        count = 0
-        with os.scandir(path) as files:
-            for file in files:
-                if matcher and matcher.match_file(file.name + ("/" if file.is_dir() else "")):
-                    continue
-                if file.is_file():
-                    file_mime_type = get_mime_type(file.path)
-                    if file_mime_type == mime_type:
-                        count += 1
-
-        print(f"Number of files with MIME type '{mime_type}': {count}")
-
-    except FileNotFoundError:
-        print(
-            f"[bold yellow]Error:[/bold yellow] The directory '{path}' does not exist."
-        )
-    except PermissionError:
-        print(
-            f"[bold yellow]Error:[/bold yellow] You do not have permission to access '{path}'."
-        )
-
-def count_filter_files_by_extension(path=".", extension=".txt", gitignore=False):
-    try:
-        matcher = get_gitignore_matcher(path) if gitignore else None
-        count = 0
-        with os.scandir(path) as files:
-            for file in files:
-                if matcher and matcher.match_file(file.name + ("/" if file.is_dir() else "")):
-                    continue
-                if file.is_file() and file.name.lower().endswith(extension.lower()):
-                    count += 1
-
-        print(f"Number of files with extension '{extension}': {count}")
-
-    except FileNotFoundError:
-        print(
-            f"[bold yellow]Error:[/bold yellow] The directory '{path}' does not exist."
-        )
-    except PermissionError:
-        print(
-            f"[bold yellow]Error:[/bold yellow] You do not have permission to access '{path}'."
-        )
-
-
-def get_sorted_entries(entries, sort_by):
-    if not sort_by:
-        return entries
+        if root == base:
+            raise
+        return  # silently skip inaccessible subdirectories
+
+    for entry in entries:
+        is_dir = entry.is_dir(follow_symlinks=False)
+        rel = os.path.relpath(entry.path, base) + ("/" if is_dir else "")
+        if matcher and matcher.match_file(rel):
+            continue
+
+        if is_dir:
+            if dirs_out is not None and (not top_level_only or root == base):
+                dirs_out.append(entry)
+            if recursive:
+                _scan_dir(entry.path, base, matcher, recursive, files_out, dirs_out, top_level_only)
+        else:
+            files_out.append(entry)
+
+
+def _collect(
+    path: str,
+    *,
+    recursive: bool = False,
+    gitignore: bool = False,
+    collect_dirs: bool = False,
+) -> tuple[list[os.DirEntry], list[os.DirEntry]]:
+    """
+    Return (files, dirs).
+
+    When collect_dirs=True and recursive=False: top-level directories only.
+    When collect_dirs=True and recursive=True: all directories at every depth.
+    """
+    matcher = get_gitignore_matcher(path) if gitignore else None
+    files: list[os.DirEntry] = []
+    dirs: list[os.DirEntry] = []
+    _scan_dir(
+        path, path, matcher, recursive, files,
+        dirs if collect_dirs else None,
+        top_level_only=not recursive,
+    )
+    return files, dirs
+
+
+# ── Filtering ────────────────────────────────────────────────────────────────────
+
+def _apply_filters(
+    entries: list[os.DirEntry],
+    *,
+    mime_type: str | None = None,
+    extension: str | None = None,
+    text: str | None = None,
+) -> list[os.DirEntry]:
+    if mime_type:
+        entries = [e for e in entries if get_mime_type(e.path) == mime_type]
+    if extension:
+        ext = extension.lower()
+        if not ext.startswith("."):
+            ext = "." + ext
+        entries = [e for e in entries if os.path.splitext(e.name)[1].lower() == ext]
+    if text:
+        needle = text.lower()
+        entries = [e for e in entries if needle in e.name.lower()]
+    return entries
+
+
+# ── Sorting ──────────────────────────────────────────────────────────────────────
+
+def _sort_entries(entries: list[os.DirEntry], sort_by: SortBy) -> list[os.DirEntry]:
     if sort_by == "size":
         return sorted(entries, key=lambda e: e.stat().st_size)
-    elif sort_by == "date":
+    if sort_by == "date":
         return sorted(entries, key=lambda e: e.stat().st_mtime)
-    elif sort_by == "name":
+    if sort_by == "name":
         return sorted(entries, key=lambda e: e.name.lower())
+    return entries
+
+
+# ── Display: count ───────────────────────────────────────────────────────────────
+
+def _display_count_flat(files: list[os.DirEntry], dirs: list[os.DirEntry]) -> None:
+    print(f"Directories: {len(dirs)}")
+    print(f"Files: {len(files)}")
+
+
+def _display_count_grouped(entries: list[os.DirEntry], group_by: str) -> None:
+    if group_by == "mime":
+        counts: Counter[str] = Counter(
+            get_mime_type(e.path) or "Unknown MIME Type" for e in entries
+        )
+        title, col_label = "File Counts by MIME Type", "MIME Type"
     else:
-        return entries
+        counts = Counter(
+            os.path.splitext(e.name)[1].lower() or "No Extension" for e in entries
+        )
+        title, col_label = "File Counts by Extension", "Extension"
+
+    table = Table(
+        show_header=True,
+        header_style="bold magenta",
+        title=title,
+        title_style="bold underline magenta",
+    )
+    table.add_column(col_label, style="bold red", justify="left")
+    table.add_column("Count", style="bold yellow", justify="right")
+    for key, count in counts.most_common():
+        table.add_row(key, str(count))
+    print(table)
+
+
+# ── Display: flat listing ────────────────────────────────────────────────────────
+
+def _display_flat_list(
+    files: list[os.DirEntry], dirs: list[os.DirEntry], path: str
+) -> None:
+    """Side-by-side directories/files table — the default view."""
+    dir_names = [f"{e.name}/" for e in dirs]
+    file_names = [e.name for e in files]
+    max_len = max(len(dir_names), len(file_names), 1)
+    dir_names += [""] * (max_len - len(dir_names))
+    file_names += [""] * (max_len - len(file_names))
+
+    label = path if path != "." else "CWD"
+    table = Table(
+        show_header=True,
+        header_style="bold magenta",
+        title=f"{label} Listing",
+        title_style="bold underline magenta",
+    )
+    table.add_column("Index", style="dim", width=6, justify="right")
+    table.add_column("Directories", style="bold blue underline", justify="left")
+    table.add_column("Files", style="bold green underline", justify="left")
+    for i, (d, f) in enumerate(zip(dir_names, file_names), start=1):
+        table.add_row(str(i), d, f)
+    print(table)
+
+
+def _display_file_list(files: list[os.DirEntry], path: str) -> None:
+    """Flat indexed path list — used when filters or --recursive are active."""
+    label = path if path != "." else "CWD"
+    table = Table(
+        show_header=True,
+        header_style="bold magenta",
+        title=f"{label} Listing",
+        title_style="bold underline magenta",
+    )
+    table.add_column("Index", style="dim", width=6, justify="right")
+    table.add_column("Path", style="bold cyan", justify="left")
+    for i, entry in enumerate(files, start=1):
+        table.add_row(str(i), entry.path)
+    print(table)
+
+
+# ── Display: grouped ─────────────────────────────────────────────────────────────
+
+def _display_grouped_mime(files: list[os.DirEntry]) -> None:
+    groups: dict[str, list[str]] = {}
+    for entry in files:
+        mime = get_mime_type(entry.path) or "unknown/type"
+        groups.setdefault(mime, []).append(entry.name)
+
+    panels = []
+    for mime, names in groups.items():
+        prefix, _, suffix = mime.partition("/")
+        color = colormap.get(prefix, colormap.get(suffix, "white"))
+        icon = MIME_TYPE_ICONS.get(suffix, MIME_TYPE_ICONS.get(prefix, "📁"))
+        content = "\n".join(f"[{color}]{n}[/{color}]" for n in names)
+        panels.append(
+            Panel(content, title=f"{icon} {mime} ({len(names)})", border_style=color, expand=False)
+        )
+    print(Columns(panels))
+
+
+def _display_grouped_extension(files: list[os.DirEntry], path: str) -> None:
+    groups: dict[str, list[str]] = {}
+    for entry in files:
+        ext = os.path.splitext(entry.name)[1].lower() or "No Extension"
+        groups.setdefault(ext, []).append(entry.path)
+
+    label = path if path != "." else "CWD"
+    table = Table(
+        show_header=True,
+        header_style="bold magenta",
+        title=f"{label} Files Grouped by Extension",
+        title_style="bold underline magenta",
+    )
+    table.add_column("Index", style="dim", width=6, justify="center")
+    table.add_column("Extension", style="bold red", justify="left")
+    table.add_column("Files", style="bold yellow", justify="left")
+    for ext, paths in groups.items():
+        for i, fp in enumerate(paths, start=1):
+            table.add_row(str(i), ext if i == 1 else "", fp)
+        table.add_row("")  # blank separator between extension groups
+    print(table)
+
+
+# ── Public entry point ───────────────────────────────────────────────────────────
+
+def run(
+    path: str = ".",
+    *,
+    count: bool = False,
+    group_by: GroupBy = None,
+    filter_mime: str | None = None,
+    filter_ext: str | None = None,
+    filter_text: str | None = None,
+    sort_by: SortBy = None,
+    recursive: bool = False,
+    gitignore: bool = False,
+) -> None:
+    """
+    Unified listing entry point. All flags compose freely:
+    --recursive, --count, --group-by, --filter-*, and --sort work in any combination.
+    """
+    has_filters = bool(filter_mime or filter_ext or filter_text)
+
+    # Dirs are needed for the default side-by-side view and for flat count.
+    # In recursive mode, collect ALL dirs (not just top-level).
+    needs_dirs = (not recursive and not has_filters and not group_by) or (count and not group_by)
+
+    try:
+        files, dirs = _collect(
+            path,
+            recursive=recursive,
+            gitignore=gitignore,
+            collect_dirs=needs_dirs,
+        )
+    except FileNotFoundError:
+        print(f"[bold yellow]Error:[/bold yellow] The directory '{path}' does not exist.")
+        return
+    except PermissionError:
+        print(f"[bold yellow]Error:[/bold yellow] You do not have permission to access '{path}'.")
+        return
+
+    if has_filters:
+        files = _apply_filters(files, mime_type=filter_mime, extension=filter_ext, text=filter_text)
+
+    if sort_by:
+        files = _sort_entries(files, sort_by)
+
+    # Dispatch to the appropriate display function
+    if count:
+        if group_by:
+            _display_count_grouped(files, group_by)
+        else:
+            _display_count_flat(files, dirs)
+    elif group_by == "mime":
+        _display_grouped_mime(files)
+    elif group_by == "extension":
+        _display_grouped_extension(files, path)
+    elif recursive or has_filters:
+        _display_file_list(files, path)
+    else:
+        _display_flat_list(files, dirs, path)
