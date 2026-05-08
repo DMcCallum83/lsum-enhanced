@@ -1,6 +1,6 @@
 [project]
 name = "lsum-enhanced"
-version = "1.0.0"
+version = "1.0.1"
 description = "Directory summary tool with powerful grouping, and recursive searching"
 readme = "README.md"
 requires-python = ">=3.10"
