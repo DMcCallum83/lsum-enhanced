@@ -50,6 +50,27 @@ sudo apt install libmagic1
 brew install libmagic
 ```
 
+#### Install it
+
+##### Globally (outwith a `venv`), install with `pipx`
+```bash
+pipx install lsum-enhanced
+```
+
+##### Existing `venv`
+```bash
+
+# existing venv
+source path/to/existing/venv/bin/activate
+pip install lsum-enhanced
+
+# new venv
+python -m path/to/new
+source path/to/new/bin/activate
+pip install lsum-enhanced
+
+```
+
 #### 🛠️ Building From Source
 
 Perfect for developers who want the latest features:
