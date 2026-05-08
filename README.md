@@ -1,9 +1,14 @@
 # 📂 lsum-enhanced
-[![Python Version](https://img.shields.io/badge/python-3.10+-blue.svg)](https://python.org)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Code Style: Black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/psf/black)
+<center>
+<a href="https://pypi.org/project/lsum-enhanced/"><img src="https://img.shields.io/pypi/v/lsum-enhanced.svg?color=blue" alt="PyPI version" /></a>
+<a href="https://python.org"><img src="https://img.shields.io/badge/python-3.10+-blue.svg" alt="Python Version" /></a>
+<a href="https://opensource.org/licenses/MIT"><img src="https://img.shields.io/badge/License-MIT-yellow.svg" alt="License: MIT" /></a>
+<a href="https://github.com/psf/black"><img src="https://img.shields.io/badge/code%20style-black-000000.svg" alt="Code Style: Black" /></a>
+</center>
 
-**lsum-enhanced** (List Summary Enhanced) is a high-performance, visually rich CLI directory analysis tool that transforms standard file listings into actionable intelligence.
+<center>
+<strong>lsum-enhanced</strong> (List Summary Enhanced) is a high-performance, visually rich CLI directory analysis tool that transforms standard file listings into actionable intelligence.
+</center>
 
 ---
 
